@@ -48,13 +48,19 @@ export const useStore = create<StoreState>((set) => ({
       body: JSON.stringify(payload),
     })
     if (!response.ok) {
-      throw new Error('Failed to create store')
+      const errorBody = (await response.json().catch(() => null)) as
+        | { detail?: string }
+        | null
+      throw new Error(errorBody?.detail ?? 'Failed to create store')
     }
+    const data = (await response.json()) as Store
+    set((state) => ({ stores: [data, ...state.stores] }))
   },
   deleteStore: async (id) => {
     const response = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' })
     if (!response.ok) {
       throw new Error('Failed to delete store')
     }
+    set((state) => ({ stores: state.stores.filter((store) => store.id !== id) }))
   },
 }))

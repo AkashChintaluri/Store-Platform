@@ -1,0 +1,17 @@
+store:
+  host: "{{ .Release.Namespace }}.stores.example.com"
+
+storageClass: gp3
+
+wordpress:
+  service:
+    type: ClusterIP
+
+  ingress:
+    enabled: false
+
+ingress:
+  enabled: true
+
+woocommerceAutomation:
+  enabled: false

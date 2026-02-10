@@ -1,0 +1,14 @@
+store:
+  host: "{{ .Release.Namespace }}.127.0.0.1.nip.io"
+
+storageClass: hostpath
+
+wordpress:
+  service:
+    type: ClusterIP
+
+  ingress:
+    enabled: false
+
+woocommerceAutomation:
+  enabled: false

@@ -1,0 +1,55 @@
+store:
+  name: ""
+  engine: wordpress
+  host: ""
+
+resources:
+  cpu: "500m"
+  memory: "512Mi"
+
+storageClass: ""
+
+wordpress:
+  enabled: true
+
+  wordpressUsername: user
+  wordpressEmail: admin@example.com
+  wordpressBlogName: Store
+  wordpressPlugins: woocommerce
+
+  mariadb:
+    enabled: true
+    auth:
+      database: wordpress
+      username: bn_wordpress
+    primary:
+      persistence:
+        size: 8Gi
+
+ingress:
+  enabled: true
+  className: nginx
+
+woocommerceAutomation:
+  enabled: false
+  wordpressPath: /opt/bitnami/wordpress
+  readyFlag: /bitnami/wordpress/.woo-ready
+  maxAttempts: 30
+  sleepSeconds: 10
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 300
+  image:
+    repository: docker.io/bitnami/wordpress
+    tag: ""
+    pullPolicy: IfNotPresent
+  existingClaim: ""
+  product:
+    name: "Test Product"
+    price: "10.00"
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"

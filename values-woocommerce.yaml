@@ -1,0 +1,24 @@
+wordpressUsername: admin
+wordpressPassword: admin123
+wordpressEmail: admin@example.com
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  hostname: store-test.127.0.0.1.nip.io
+  ingressClassName: nginx
+  path: /
+  pathType: Prefix
+
+
+mariadb:
+  auth:
+    rootPassword: root123
+    password: wp123
+    database: wordpress
+
+persistence:
+  enabled: true
+  size: 10Gi

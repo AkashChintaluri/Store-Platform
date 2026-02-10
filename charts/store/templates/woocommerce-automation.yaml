@@ -1,0 +1,126 @@
+{{- if .Values.woocommerceAutomation.enabled }}
+{{- $host := tpl .Values.store.host . }}
+{{- $imageRepo := .Values.woocommerceAutomation.image.repository | default .Values.wordpress.image.repository }}
+{{- $imageTag := .Values.woocommerceAutomation.image.tag | default .Values.wordpress.image.tag | default "latest" }}
+{{- $imagePullPolicy := .Values.woocommerceAutomation.image.pullPolicy | default "IfNotPresent" }}
+{{- $claimName := .Values.woocommerceAutomation.existingClaim | default (printf "%s-wordpress" .Release.Name) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-woo-ready
+  namespace: {{ .Release.Namespace }}
+data:
+  woo-ready.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    WORDPRESS_PATH="${WORDPRESS_PATH:-{{ .Values.woocommerceAutomation.wordpressPath }}}"
+    READY_FLAG="${READY_FLAG:-${WORDPRESS_PATH}/.woo-ready}"
+    STORE_URL="{{ printf "http://%s" $host }}"
+    PRODUCT_NAME="${PRODUCT_NAME:-{{ .Values.woocommerceAutomation.product.name }}}"
+    PRODUCT_PRICE="${PRODUCT_PRICE:-{{ .Values.woocommerceAutomation.product.price }}}"
+    MAX_ATTEMPTS={{ .Values.woocommerceAutomation.maxAttempts }}
+    SLEEP_SECONDS={{ .Values.woocommerceAutomation.sleepSeconds }}
+
+    log() {
+      echo "$(date -Is) $1"
+    }
+
+    cd "${WORDPRESS_PATH}"
+
+    if [[ -f "${READY_FLAG}" ]]; then
+      log "WooCommerce already marked ready"
+      exit 0
+    fi
+
+    if ! command -v wp >/dev/null 2>&1; then
+      log "wp-cli not found in image"
+      exit 1
+    fi
+
+    for attempt in $(seq 1 ${MAX_ATTEMPTS}); do
+      if wp core is-installed --allow-root; then
+        log "WordPress core ready"
+        break
+      fi
+      log "Waiting for WordPress core (attempt ${attempt}/${MAX_ATTEMPTS})"
+      sleep "${SLEEP_SECONDS}"
+    done
+
+    if ! wp core is-installed --allow-root; then
+      log "WordPress core never became ready"
+      exit 1
+    fi
+
+    if ! wp plugin is-installed woocommerce --allow-root; then
+      wp plugin install woocommerce --activate --allow-root
+    elif ! wp plugin is-active woocommerce --allow-root; then
+      wp plugin activate woocommerce --allow-root
+    fi
+
+    wp wc tool run install_pages --user=1 --allow-root || true
+
+    PRODUCTS=$(wp post list --post_type=product --format=ids --allow-root)
+    if [[ -z "${PRODUCTS}" ]]; then
+      wp wc product create --name="${PRODUCT_NAME}" --type=simple --status=publish --regular_price="${PRODUCT_PRICE}" --user=1 --allow-root
+    fi
+
+    wp option patch update woocommerce_cod_settings enabled yes --allow-root || true
+    wp option patch update woocommerce_cod_settings title "Cash on Delivery" --allow-root || true
+    wp option patch update woocommerce_default_gateway cod --allow-root || true
+
+    echo "ready $(date -Is)" > "${READY_FLAG}"
+    log "WooCommerce automation complete"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-woo-ready
+  namespace: {{ .Release.Namespace }}
+spec:
+  backoffLimit: {{ .Values.woocommerceAutomation.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.woocommerceAutomation.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: woo-ready
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: OnFailure
+      volumes:
+        - name: woo-ready-script
+          configMap:
+            name: {{ .Release.Name }}-woo-ready
+            defaultMode: 0775
+        - name: wordpress-data
+          persistentVolumeClaim:
+            claimName: {{ $claimName }}
+      containers:
+        - name: woo-ready
+          image: "{{ $imageRepo }}:{{ $imageTag }}"
+          imagePullPolicy: {{ $imagePullPolicy }}
+          command: ["/bin/bash", "/opt/woo/woo-ready.sh"]
+          resources:
+            requests:
+              cpu: {{ .Values.woocommerceAutomation.resources.requests.cpu | quote }}
+              memory: {{ .Values.woocommerceAutomation.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.woocommerceAutomation.resources.limits.cpu | quote }}
+              memory: {{ .Values.woocommerceAutomation.resources.limits.memory | quote }}
+          env:
+            - name: WORDPRESS_PATH
+              value: {{ .Values.woocommerceAutomation.wordpressPath | quote }}
+            - name: READY_FLAG
+              value: {{ .Values.woocommerceAutomation.readyFlag | quote }}
+            - name: PRODUCT_NAME
+              value: {{ .Values.woocommerceAutomation.product.name | quote }}
+            - name: PRODUCT_PRICE
+              value: {{ .Values.woocommerceAutomation.product.price | quote }}
+            - name: STORE_URL
+              value: {{ printf "http://%s" $host | quote }}
+          volumeMounts:
+            - name: woo-ready-script
+              mountPath: /opt/woo
+            - name: wordpress-data
+              mountPath: {{ .Values.woocommerceAutomation.wordpressPath }}
+{{- end }}

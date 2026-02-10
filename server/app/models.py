@@ -18,6 +18,8 @@ class StoreResponse(BaseModel):
     id: str
     name: str
     engine: str
+    namespace: Optional[str] = None
+    host: Optional[str] = None
     status: str
     url: Optional[str] = None
     created_at: datetime

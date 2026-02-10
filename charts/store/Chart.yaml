@@ -1,0 +1,12 @@
+apiVersion: v2
+name: store
+description: Store provisioning chart (WordPress / future engines)
+type: application
+version: 0.1.0
+appVersion: "1.0"
+
+dependencies:
+  - name: wordpress
+    version: 28.x.x
+    repository: https://charts.bitnami.com/bitnami
+    condition: wordpress.enabled
