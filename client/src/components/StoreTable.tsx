@@ -11,6 +11,7 @@ type Store = {
   created_at: string
   error?: string
   namespace?: string
+  password?: string
 }
 
 const formatDate = (value: string) => {
@@ -148,9 +149,11 @@ export default function StoreTable() {
                           </div>
                           <div>
                             <strong>Password:</strong>{' '}
-                            <em style={{ color: '#666' }}>
-                              Run: kubectl get secret -n {store.namespace || store.name} {store.name}-wordpress -o jsonpath="&#123;.data.wordpress-password&#125;" | base64 -d
-                            </em>
+                            {store.password ? (
+                              <code>{store.password}</code>
+                            ) : (
+                              <em style={{ color: '#666' }}>Loading...</em>
+                            )}
                           </div>
                         </div>
                       </td>

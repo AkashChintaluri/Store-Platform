@@ -1,4 +1,30 @@
 import subprocess
+import base64
+
+
+def get_wordpress_password(namespace: str, store_name: str) -> str | None:
+    """Retrieve the WordPress admin password from Kubernetes secret."""
+    cmd = [
+        "kubectl",
+        "get",
+        "secret",
+        f"{store_name}-wordpress",
+        "-n",
+        namespace,
+        "-o",
+        "jsonpath={.data.wordpress-password}",
+    ]
+    try:
+        encoded = subprocess.check_output(cmd, text=True).strip()
+        if not encoded:
+            return None
+        # Decode base64
+        decoded = base64.b64decode(encoded).decode('utf-8')
+        return decoded
+    except subprocess.CalledProcessError:
+        return None
+    except Exception:
+        return None
 
 
 def namespace_ready(namespace: str) -> bool:

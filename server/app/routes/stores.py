@@ -17,7 +17,7 @@ from pymongo.errors import PyMongoError
 from ..models import StoreCreate, StoreResponse
 from ..db import get_stores_collection
 from ..orchestrator.provisioner import install_store, delete_store as helm_delete_store, generate_values, configure_woocommerce
-from ..orchestrator.status import namespace_ready
+from ..orchestrator.status import namespace_ready, get_wordpress_password
 
 
 router = APIRouter(prefix="/api/stores", tags=["stores"])
@@ -37,6 +37,16 @@ async def get_stores():
             # Convert MongoDB _id to id for response
             store["id"] = str(store["_id"])
             del store["_id"]
+            
+            # Fetch password for READY stores
+            if store.get("status") == "READY" and store.get("namespace") and store.get("name"):
+                password = await asyncio.to_thread(
+                    get_wordpress_password, 
+                    store["namespace"], 
+                    store["name"]
+                )
+                store["password"] = password
+            
             stores.append(StoreResponse(**store))
             
         return stores

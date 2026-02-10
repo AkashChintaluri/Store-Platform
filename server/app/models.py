@@ -24,6 +24,7 @@ class StoreResponse(BaseModel):
     url: Optional[str] = None
     created_at: datetime
     error: Optional[str] = None
+    password: Optional[str] = None
 
 
 # Future auth models (when authentication is added)
