@@ -1,5 +1,5 @@
 store:
-  host: "{{ .Release.Namespace }}.127.0.0.1.nip.io"
+  host: "{{ .Release.Namespace }}.localhost"
 
 storageClass: hostpath
 

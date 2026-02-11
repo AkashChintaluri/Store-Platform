@@ -1,55 +1,104 @@
 # Store Platform
 
-A Kubernetes-based e-commerce store deployment platform that supports WooCommerce and Medusa stores with automated provisioning and management.
+A **Kubernetes-based e-commerce store deployment platform** with support for multiple store engines (WooCommerce, Medusa, and more) using a **type erasure adapter pattern** for extensibility.
+
+## 🆕 What's New: Type Erasure Adapter System
+
+The platform now features a **type erasure adapter pattern** that makes adding new e-commerce platforms incredibly simple:
+
+- ✅ **WooCommerce** - Fully implemented and production-ready
+- 🚧 **Medusa** - Interface ready, implementation pending
+- 📝 **Any Platform** - Add in 40-85 minutes using our template
+
+**Key Innovation**: Platform-specific logic is isolated in adapters, so adding Shopify, Magento, or any other platform requires **zero changes** to core orchestration code. Just implement the adapter interface and register it!
+
+👉 **See**: [ADAPTER_SYSTEM.md](docs/ADAPTER_SYSTEM.md) for the complete guide.
+
+---
+
+## ✨ Key Features
+
+- 🏪 **Multi-Platform Support** - WooCommerce (fully implemented), Medusa (ready for implementation), and easy to add more
+- 🔌 **Type Erasure Architecture** - Add new platforms without modifying core orchestration code
+- ☸️ **Kubernetes-Native** - Each store is an isolated Helm release with dedicated namespace
+- 🚀 **Automated Provisioning** - One-click store deployment with platform-specific configuration
+- 📊 **MongoDB Persistence** - Store metadata and state management
+- 🎨 **Modern React UI** - Clean dashboard for store management
+- 🔒 **Complete Isolation** - Per-store namespaces, quotas, and network policies
 
 ## Architecture Overview
 
-The Store Platform consists of three main components:
+The Store Platform uses a **three-tier architecture** with a unique **adapter pattern** for multi-platform support:
 
 ### 1. **FastAPI Backend** (`server/`)
-- MongoDB-backed REST API for store management
-- Store lifecycle operations (create, list, delete)
-- MongoDB Atlas integration for data persistence
-- Environment-based configuration
+- **REST API** - Store lifecycle management (create, list, delete)
+- **Adapter System** - Type erasure pattern for platform-agnostic orchestration
+- **MongoDB Atlas** - Persistent store metadata and state
+- **Kubernetes Orchestration** - Helm-based deployment automation
 
 ### 2. **React Frontend** (`client/`)
-- Modern React dashboard for store management
-- Store creation and monitoring interface
-- Real-time store status updates
+- **Store Dashboard** - Create and monitor stores
+- **Real-time Updates** - Live store status and health
+- **Multi-Platform UI** - Select engine type during creation
 
-### 3. **Helm-Based Store Deployment** (`charts/`)
-- **Each store is a Helm release** - Every store deployment is managed as an independent Helm release
-- **Namespace-per-store enforces isolation** - Each store gets its own Kubernetes namespace for complete resource isolation
-- **Deletion is deterministic via Helm uninstall** - Store removal is clean and predictable through Helm's lifecycle management
+### 3. **Helm-Based Deployment** (`charts/`)
+- **Isolated Releases** - Each store is an independent Helm release
+- **Namespace Isolation** - Dedicated Kubernetes namespace per store
+- **Deterministic Cleanup** - Clean removal via `helm uninstall`
 
-## Store Deployment Architecture
+### 4. **Platform Adapters** (`server/app/adapters/`) ⭐ NEW
+- **Type Erasure Pattern** - Common interface for all platforms
+- **WooCommerce Adapter** - WordPress + WooCommerce + MariaDB
+- **Medusa Adapter** - Placeholder ready for implementation
+- **Extensible** - Add new platforms in 40-85 minutes
+
+## Multi-Platform Architecture
 
 ```
-Store Platform API
-├── MongoDB Atlas (store metadata)
-├── Kubernetes Cluster
-│   ├── store-1 namespace
-│   │   └── Helm Release: store-1
-│   │       ├── WordPress/WooCommerce
-│   │       ├── MariaDB
-│   │       └── Ingress
-│   ├── store-2 namespace
-│   │   └── Helm Release: store-2
-│   │       ├── Medusa.js
-│   │       ├── PostgreSQL
-│   │       └── Ingress
-│   └── store-n namespace
-│       └── Helm Release: store-n
+┌─────────────────────────────────────────────────────────────┐
+│                     Store Platform API                      │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │           Platform Adapter System                    │  │
+│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐    │  │
+│  │  │ WooCommerce│  │   Medusa   │  │   Future   │    │  │
+│  │  │  Adapter   │  │  Adapter   │  │  Adapters  │    │  │
+│  │  └────────────┘  └────────────┘  └────────────┘    │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                           ↓                                 │
+│                    Helm Deployment                          │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│                  Kubernetes Cluster                         │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐                 │
+│  │ store-1 (WooCom)│  │ store-2 (Medusa)│                 │
+│  │ ├── WordPress   │  │ ├── Medusa.js   │                 │
+│  │ ├── MariaDB     │  │ ├── PostgreSQL  │                 │
+│  │ └── Ingress     │  │ └── Ingress     │                 │
+│  └─────────────────┘  └─────────────────┘                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Key Benefits
+## Platform Support Status
 
-- **Complete Isolation**: Each store runs in its own namespace with dedicated resources
-- **Predictable Lifecycle**: Helm manages the entire store lifecycle (install, upgrade, uninstall)
-- **Resource Management**: Per-store quotas and network policies
-- **Clean Deletion**: `helm uninstall` removes all store resources deterministically
-- **Scalability**: Independent scaling per store
-- **Multi-Engine Support**: WooCommerce and Medusa stores using the same infrastructure
+| Platform | Status | Implementation | Documentation |
+|----------|--------|----------------|---------------|
+| **WooCommerce** | ✅ **Production Ready** | WordPress + WooCommerce plugin + MariaDB | Fully functional |
+| **Medusa** | 🚧 **Placeholder Ready** | Interface defined, awaiting implementation | [Implementation Guide](docs/ADAPTER_SYSTEM.md) |
+| **Others** | 📝 **Template Available** | Use adapter template | [Quick Reference](docs/QUICK_REFERENCE.md) |
+
+## Key Benefits
+
+- ✅ **Extensible Architecture** - Add new platforms without modifying core code
+- ✅ **Type-Safe** - Python type hints and abstract base classes
+- ✅ **Complete Isolation** - Each store runs in its own namespace with dedicated resources
+- ✅ **Predictable Lifecycle** - Helm manages install, upgrade, and uninstall operations
+- ✅ **Resource Management** - Per-store quotas and network policies
+- ✅ **Clean Deletion** - `helm uninstall` removes all store resources deterministically
+- ✅ **Independent Scaling** - Scale each store based on its needs
+- ✅ **Production Ready** - WooCommerce fully tested and operational
 
 ## Getting Started
 
@@ -79,20 +128,29 @@ Store Platform API
    npm run dev
    ```
 
-3. **Deploy a Store**:
+3. **Create a Store** (API handles Helm deployment automatically):
    ```bash
-   # Create store via API
+   # Create WooCommerce store
    curl -X POST "http://localhost:8000/api/stores" \
      -H "Content-Type: application/json" \
      -d '{"name": "my-store", "engine": "woocommerce"}'
-
-   # Deploy using Helm
-   helm install my-store ./charts/store \
-     --namespace my-store \
-     --create-namespace \
-     -f ./charts/store/values.yaml \
-     -f ./charts/store/values-local.yaml
+   
+   # Or create Medusa store (when implemented)
+   curl -X POST "http://localhost:8000/api/stores" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "my-medusa", "engine": "medusa"}'
+   
+   # The API will:
+   # - Generate platform-specific Helm values
+   # - Deploy the Helm chart
+   # - Configure the platform (install plugins, run migrations, etc.)
+   # - Return the store URL and admin password
    ```
+
+4. **Access Your Store**:
+   - **WooCommerce**: `http://my-store.localhost/shop/`
+   - **Admin**: `http://my-store.localhost/wp-admin/`
+   - Password returned in API response
 
 ## Store Management Commands
 
@@ -152,13 +210,91 @@ The store chart supports different configurations:
 ## API Endpoints
 
 ### Store Management
-- `GET /api/stores` - List all stores
-- `POST /api/stores` - Create a new store
-- `DELETE /api/stores/{store_id}` - Mark store for deletion
+
+#### Create Store
+```http
+POST /api/stores
+Content-Type: application/json
+
+{
+  "name": "my-store",
+  "engine": "woocommerce"  // or "medusa"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "name": "my-store",
+  "engine": "woocommerce",
+  "namespace": "my-store",
+  "host": "my-store.example.com",
+  "status": "PROVISIONING",  // → "READY" when complete
+  "url": "http://my-store.example.com/shop/",
+  "created_at": "2026-02-11T18:00:00Z",
+  "password": "admin-password"  // Available when status is READY
+}
+```
+
+#### List Stores
+```http
+GET /api/stores
+```
+
+#### Delete Store
+```http
+DELETE /api/stores/{store_id}
+```
 
 ### System
 - `GET /health` - Health check
-- `GET /docs` - API documentation
+- `GET /docs` - Interactive API documentation (Swagger UI)
+
+## Platform Adapter System
+
+The Store Platform uses a **type erasure adapter pattern** to support multiple e-commerce platforms without coupling the core orchestration logic to specific implementations.
+
+### How It Works
+
+```python
+# 1. Factory creates the appropriate adapter
+adapter = get_store_adapter(engine)  # Returns StoreAdapter interface
+
+# 2. Adapter generates platform-specific configuration
+values = adapter.get_default_values(store_name, host)
+
+# 3. Adapter handles platform-specific setup
+success, error = adapter.configure_platform(namespace, release_name)
+```
+
+### Adapter Interface
+
+All platform adapters implement these methods:
+
+| Method | Purpose |
+|--------|---------|
+| `get_chart_dependency()` | Helm chart configuration |
+| `get_default_values()` | Platform-specific Helm values |
+| `configure_platform()` | Post-deployment setup (plugins, migrations, etc.) |
+| `get_admin_password()` | Retrieve admin credentials |
+| `get_pod_selector()` | Kubernetes pod label selector |
+| `get_store_url_path()` | Store frontend URL path |
+| `is_platform_ready()` | Platform initialization check |
+
+### Current Implementations
+
+**WooCommerce Adapter** (`server/app/adapters/woocommerce.py`)
+- ✅ WordPress + WooCommerce plugin installation
+- ✅ MariaDB database configuration
+- ✅ Test product creation
+- ✅ Payment gateway setup (COD)
+- ✅ Admin password retrieval
+
+**Medusa Adapter** (`server/app/adapters/medusa.py`)
+- 🚧 Interface defined with placeholders
+- 📝 Ready for implementation
+- 📚 See [ADAPTER_SYSTEM.md](docs/ADAPTER_SYSTEM.md) for guide
 
 ## Development
 
@@ -169,28 +305,67 @@ The store chart supports different configurations:
 │   │   ├── main.py  # FastAPI app setup
 │   │   ├── db.py    # MongoDB connection
 │   │   ├── models.py # Pydantic models
-│   │   └── routes/  # API endpoints
+│   │   ├── routes/  # API endpoints
+│   │   ├── adapters/ # Platform adapter system (type erasure)
+│   │   │   ├── base.py        # StoreAdapter interface
+│   │   │   ├── factory.py     # Adapter factory
+│   │   │   ├── woocommerce.py # WooCommerce implementation
+│   │   │   └── medusa.py      # Medusa placeholder
+│   │   └── orchestrator/ # Platform-agnostic orchestration
+│   │       ├── provisioner.py # Store provisioning
+│   │       ├── status.py      # Status checking
+│   │       └── helm.py        # Helm wrapper
 │   └── main.py      # Application entry point
 ├── client/          # React frontend
 │   ├── src/
 │   │   ├── components/
 │   │   └── pages/
 │   └── package.json
-└── charts/          # Helm charts
-    └── store/       # Store deployment chart
-        ├── Chart.yaml
-        ├── values.yaml
-        ├── values-local.yaml
-        ├── values-prod.yaml
-        └── templates/
+├── charts/          # Helm charts
+│   └── store/       # Store deployment chart
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       ├── values-local.yaml
+│       ├── values-prod.yaml
+│       └── templates/
+└── docs/            # Documentation
+    ├── ADAPTER_SYSTEM.md  # Adapter system guide
+    └── LOCAL_DOMAIN_SETUP.md
 ```
 
 ### Adding Support for New Store Engines
 
-1. Update `charts/store/values.yaml` with new engine configuration
-2. Add engine-specific templates in `charts/store/templates/`
-3. Update API models in `server/app/models.py`
-4. Add engine option to frontend store creation form
+The platform uses a **type erasure adapter system** for supporting multiple e-commerce platforms. This allows adding new platforms without modifying core orchestration logic.
+
+#### Quick Start
+
+1. **Create a new adapter** in `server/app/adapters/your_platform.py`
+   - Implement the `StoreAdapter` interface
+   - Define platform-specific Helm values
+   - Implement post-deployment configuration
+
+2. **Register the adapter** in `server/app/adapters/factory.py`
+   - Add to the `adapters` dictionary
+   - Update the `StoreEngine` type
+
+3. **Update the API model** in `server/app/models.py`
+   - Add the new engine to `StoreCreate.engine` Literal type
+
+4. **Update the frontend** in `client/src/components/CreateStoreModal.tsx`
+   - Add the new engine option to the dropdown
+
+5. **Create Helm templates** (if needed) in `charts/store/templates/`
+   - Add platform-specific Kubernetes resources
+
+For detailed instructions and examples, see [ADAPTER_SYSTEM.md](docs/ADAPTER_SYSTEM.md).
+
+#### Current Platform Support
+
+| Platform | Status | Documentation |
+|----------|--------|---------------|
+| WooCommerce | ✅ Fully Implemented | WordPress + WooCommerce plugin |
+| Medusa | 🚧 Placeholder Ready | See [ADAPTER_SYSTEM.md](docs/ADAPTER_SYSTEM.md) for implementation guide |
+
 
 ## Deployment Architecture Benefits
 
@@ -256,6 +431,48 @@ Each store namespace includes:
 - Database credentials per store
 - TLS certificates
 - API keys and tokens
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+### Architecture & Design
+- **[ADAPTER_SYSTEM.md](docs/ADAPTER_SYSTEM.md)** - Complete guide to the type erasure adapter pattern
+  - Architecture overview and design decisions
+  - Interface documentation
+  - Step-by-step implementation guide
+  - Medusa implementation checklist
+
+- **[ARCHITECTURE_DIAGRAMS.md](docs/ARCHITECTURE_DIAGRAMS.md)** - Visual architecture diagrams
+  - Type erasure flow diagrams
+  - Component interaction charts
+  - Before/after refactoring comparison
+  - Data flow examples
+
+### Developer Guides
+- **[QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md)** - Quick start for adding new platforms
+  - Implementation checklist (40-85 min)
+  - Common patterns and examples
+  - Troubleshooting guide
+  - Time estimates
+
+- **[TYPE_ERASURE_IMPLEMENTATION.md](docs/TYPE_ERASURE_IMPLEMENTATION.md)** - Implementation summary
+  - Changes made
+  - Files created and modified
+  - Code statistics
+  - Next steps
+
+- **[IMPLEMENTATION_COMPLETE.md](docs/IMPLEMENTATION_COMPLETE.md)** - Project completion summary
+  - Feature overview
+  - Success criteria
+  - Testing recommendations
+
+### Code Documentation
+- **[server/app/adapters/README.md](server/app/adapters/README.md)** - Adapter system overview
+- **[server/app/adapters/example_template.py](server/app/adapters/example_template.py)** - Template for new adapters
+
+### Local Development
+- **[LOCAL_DOMAIN_SETUP.md](docs/LOCAL_DOMAIN_SETUP.md)** - Local domain configuration
 
 ## Contributing
 

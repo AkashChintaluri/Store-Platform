@@ -1,22 +1,23 @@
 """
-This module provisions and deletes stores using Helm.
+This module provisions and deletes stores using Helm and platform adapters.
 
 Responsibilities:
-- Translate store metadata into Helm values
+- Translate store metadata into Helm values using platform adapters
 - Call Helm install / uninstall
-- Configure WooCommerce via wp-cli
+- Delegate platform-specific configuration to adapters
 - Be safe to retry (idempotent)
 - Do NOT talk to MongoDB directly
 """
 
 import os
-import subprocess
 import tempfile
 from pathlib import Path
+from typing import Literal
 
 import yaml
 
 from .helm import run_helm
+from ..adapters import get_store_adapter
 
 
 CHART_PATH = str(Path(__file__).resolve().parents[3] / "charts" / "store")
@@ -25,6 +26,7 @@ PROD_VALUES_FILE = str(Path(__file__).resolve().parents[3] / "charts" / "store" 
 
 
 def get_values_file() -> str:
+    """Get the base values file based on environment."""
     env_values_file = os.getenv("STORE_VALUES_FILE", "").strip()
     if env_values_file:
         return env_values_file
@@ -32,21 +34,23 @@ def get_values_file() -> str:
     return PROD_VALUES_FILE if environment == "production" else DEFAULT_VALUES_FILE
 
 
-def generate_values(store_name: str, host: str) -> str:
+def generate_values(store_name: str, host: str, engine: Literal["woocommerce", "medusa"]) -> str:
     """
-    Generate a temporary Helm values file for a store.
-    Returns path to the temp file.
+    Generate a temporary Helm values file for a store using the platform adapter.
+    
+    Args:
+        store_name: Name of the store
+        host: Hostname for the store
+        engine: Store platform engine
+        
+    Returns:
+        str: Path to the temporary values file
     """
-    values = {
-        "store": {
-            "name": store_name,
-            "host": host,
-        },
-        "ingress": {
-            "enabled": True,
-            "className": "nginx",
-        },
-    }
+    # Get the platform-specific adapter
+    adapter = get_store_adapter(engine)
+    
+    # Generate platform-specific values
+    values = adapter.get_default_values(store_name, host)
 
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".yaml", encoding="utf-8") as tmp:
         yaml.safe_dump(values, tmp)
@@ -56,6 +60,14 @@ def generate_values(store_name: str, host: str) -> str:
 def install_store(store_name: str, namespace: str, values_file: str | None = None):
     """
     Install or upgrade a store Helm release.
+    
+    Args:
+        store_name: Name of the store
+        namespace: Kubernetes namespace
+        values_file: Path to Helm values file
+        
+    Returns:
+        str: Helm command output
     """
     values_file = values_file or get_values_file()
     cmd = [
@@ -76,6 +88,13 @@ def install_store(store_name: str, namespace: str, values_file: str | None = Non
 def delete_store(store_name: str, namespace: str):
     """
     Delete a store and all Kubernetes resources.
+    
+    Args:
+        store_name: Name of the store
+        namespace: Kubernetes namespace
+        
+    Returns:
+        str: Helm command output
     """
     cmd = [
         "helm",
@@ -87,101 +106,67 @@ def delete_store(store_name: str, namespace: str):
     return run_helm(cmd)
 
 
+def configure_platform(
+    namespace: str, 
+    release_name: str, 
+    engine: Literal["woocommerce", "medusa"]
+) -> tuple[bool, str | None]:
+    """
+    Configure the store platform using the appropriate adapter.
+    
+    This delegates to the platform-specific adapter for post-deployment configuration.
+    
+    Args:
+        namespace: Kubernetes namespace
+        release_name: Helm release name
+        engine: Store platform engine
+        
+    Returns:
+        tuple: (success: bool, error_message: Optional[str])
+    """
+    adapter = get_store_adapter(engine)
+    return adapter.configure_platform(namespace, release_name)
+
+
+def get_admin_password(
+    namespace: str, 
+    release_name: str, 
+    engine: Literal["woocommerce", "medusa"]
+) -> str | None:
+    """
+    Get the admin password for a store using the appropriate adapter.
+    
+    Args:
+        namespace: Kubernetes namespace
+        release_name: Helm release name
+        engine: Store platform engine
+        
+    Returns:
+        Optional[str]: Admin password or None if not available
+    """
+    adapter = get_store_adapter(engine)
+    return adapter.get_admin_password(namespace, release_name)
+
+
+def get_store_url_path(engine: Literal["woocommerce", "medusa"]) -> str:
+    """
+    Get the URL path for a store using the appropriate adapter.
+    
+    Args:
+        engine: Store platform engine
+        
+    Returns:
+        str: URL path (e.g., "/shop/" for WooCommerce)
+    """
+    adapter = get_store_adapter(engine)
+    return adapter.get_store_url_path()
+
+
+# Backward compatibility - keep old function name
 def configure_woocommerce(namespace: str, release_name: str) -> tuple[bool, str | None]:
     """
-    Configure WooCommerce in the WordPress pod using wp-cli.
-    Returns (success, error_message).
+    Legacy function for WooCommerce configuration.
+    
+    This is kept for backward compatibility. New code should use configure_platform().
     """
-    # Find the WordPress pod
-    get_pod_cmd = [
-        "kubectl",
-        "get",
-        "pods",
-        "-n",
-        namespace,
-        "-l",
-        f"app.kubernetes.io/name=wordpress,app.kubernetes.io/instance={release_name}",
-        "-o",
-        "jsonpath={.items[0].metadata.name}",
-    ]
-    try:
-        pod_name = subprocess.check_output(get_pod_cmd, text=True, stderr=subprocess.DEVNULL).strip()
-        if not pod_name:
-            return False, "WordPress pod not found"
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to find WordPress pod: {e}"
-    
-    # Check if WordPress core is installed
-    check_cmd = [
-        "kubectl",
-        "exec",
-        "-n",
-        namespace,
-        pod_name,
-        "--",
-        "bash",
-        "-c",
-        "cd /opt/bitnami/wordpress && wp core is-installed --allow-root",
-    ]
-    try:
-        subprocess.check_output(check_cmd, text=True, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError:
-        return False, "WordPress core not installed"
-    
-    # Install/activate WooCommerce
-    woo_cmd = [
-        "kubectl",
-        "exec",
-        "-n",
-        namespace,
-        pod_name,
-        "--",
-        "bash",
-        "-c",
-        "cd /opt/bitnami/wordpress && "
-        "(wp plugin is-installed woocommerce --allow-root || wp plugin install woocommerce --activate --allow-root) && "
-        "(wp plugin is-active woocommerce --allow-root || wp plugin activate woocommerce --allow-root)",
-    ]
-    try:
-        subprocess.check_output(woo_cmd, text=True, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to install/activate WooCommerce: {e}"
-    
-    # Create test product if none exist
-    product_cmd = [
-        "kubectl",
-        "exec",
-        "-n",
-        namespace,
-        pod_name,
-        "--",
-        "bash",
-        "-c",
-        "cd /opt/bitnami/wordpress && "
-        "PRODUCTS=$(wp post list --post_type=product --format=ids --allow-root) && "
-        "[[ -z \"$PRODUCTS\" ]] && wp wc product create --name='Test Product' --type=simple --status=publish --regular_price='10.00' --user=1 --allow-root || true",
-    ]
-    try:
-        subprocess.check_output(product_cmd, text=True, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to create product: {e}"
-    
-    # Enable COD payment
-    cod_cmd = [
-        "kubectl",
-        "exec",
-        "-n",
-        namespace,
-        pod_name,
-        "--",
-        "bash",
-        "-c",
-        "cd /opt/bitnami/wordpress && "
-        "wp wc payment_gateway update cod --enabled=true --user=1 --allow-root",
-    ]
-    try:
-        subprocess.check_output(cod_cmd, text=True, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as e:
-        return False, f"Failed to enable COD: {e}"
-    
-    return True, None
+    return configure_platform(namespace, release_name, "woocommerce")

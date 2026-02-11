@@ -1,30 +1,44 @@
+"""
+Store status checking utilities.
+
+This module provides functions to check the readiness and status of deployed stores.
+"""
+
 import subprocess
-import base64
+from typing import Literal
+
+from ..adapters import get_store_adapter
 
 
+def get_store_password(
+    namespace: str, 
+    store_name: str, 
+    engine: Literal["woocommerce", "medusa"]
+) -> str | None:
+    """
+    Retrieve the admin password for a store using the appropriate adapter.
+    
+    Args:
+        namespace: Kubernetes namespace
+        store_name: Name of the store (Helm release name)
+        engine: Store platform engine
+        
+    Returns:
+        Optional[str]: Admin password or None if not available
+    """
+    adapter = get_store_adapter(engine)
+    return adapter.get_admin_password(namespace, store_name)
+
+
+# Backward compatibility - keep old function name for WooCommerce
 def get_wordpress_password(namespace: str, store_name: str) -> str | None:
-    """Retrieve the WordPress admin password from Kubernetes secret."""
-    cmd = [
-        "kubectl",
-        "get",
-        "secret",
-        f"{store_name}-wordpress",
-        "-n",
-        namespace,
-        "-o",
-        "jsonpath={.data.wordpress-password}",
-    ]
-    try:
-        encoded = subprocess.check_output(cmd, text=True).strip()
-        if not encoded:
-            return None
-        # Decode base64
-        decoded = base64.b64decode(encoded).decode('utf-8')
-        return decoded
-    except subprocess.CalledProcessError:
-        return None
-    except Exception:
-        return None
+    """
+    Legacy function for retrieving WordPress password.
+    
+    This is kept for backward compatibility. New code should use get_store_password().
+    """
+    return get_store_password(namespace, store_name, "woocommerce")
+
 
 
 def namespace_ready(namespace: str) -> bool:

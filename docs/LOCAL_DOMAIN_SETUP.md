@@ -204,7 +204,7 @@ STORE_BASE_PORT=
 ### Helm Values (values-local.yaml)
 ```yaml
 store:
-  host: "{{ .Release.Namespace }}.127.0.0.1.nip.io"
+  host: "{{ .Release.Namespace }}.localhost"
 
 ingress:
   enabled: false  # Using top-level ingress instead

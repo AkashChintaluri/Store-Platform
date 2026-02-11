@@ -16,8 +16,14 @@ from pymongo.errors import PyMongoError
 
 from ..models import StoreCreate, StoreResponse
 from ..db import get_stores_collection
-from ..orchestrator.provisioner import install_store, delete_store as helm_delete_store, generate_values, configure_woocommerce
-from ..orchestrator.status import namespace_ready, get_wordpress_password
+from ..orchestrator.provisioner import (
+    install_store, 
+    delete_store as helm_delete_store, 
+    generate_values, 
+    configure_platform,
+    get_store_url_path
+)
+from ..orchestrator.status import namespace_ready, get_store_password
 
 
 router = APIRouter(prefix="/api/stores", tags=["stores"])
@@ -39,11 +45,12 @@ async def get_stores():
             del store["_id"]
             
             # Fetch password for READY stores
-            if store.get("status") == "READY" and store.get("namespace") and store.get("name"):
+            if store.get("status") == "READY" and store.get("namespace") and store.get("name") and store.get("engine"):
                 password = await asyncio.to_thread(
-                    get_wordpress_password, 
+                    get_store_password, 
                     store["namespace"], 
-                    store["name"]
+                    store["name"],
+                    store["engine"]
                 )
                 store["password"] = password
             
@@ -77,7 +84,8 @@ async def create_store(store_data: StoreCreate):
         base_port = os.getenv("STORE_BASE_PORT", "").strip()
         host = f"{store_data.name}.{base_domain}" if base_domain else store_data.name
         base_url = f"http://{host}:{base_port}" if base_port else f"http://{host}"
-        store_url = f"{base_url}/shop/"
+        url_path = get_store_url_path(store_data.engine)
+        store_url = f"{base_url}{url_path}"
         
         # Create store document
         store_doc = {
@@ -97,41 +105,41 @@ async def create_store(store_data: StoreCreate):
         
         try:
             # Generate Helm values and deploy
-            values_file = generate_values(store_data.name, host)
+            values_file = generate_values(store_data.name, host, store_data.engine)
             install_store(store_data.name, namespace, values_file)
             
             for _ in range(30):
                 pods_ready = await asyncio.to_thread(namespace_ready, namespace)
                 
                 if pods_ready:
-                    # Pods are ready, now run WooCommerce automation
-                    woo_success, woo_error = await asyncio.to_thread(
-                        configure_woocommerce, namespace, store_data.name
+                    # Pods are ready, now run platform configuration
+                    platform_success, platform_error = await asyncio.to_thread(
+                        configure_platform, namespace, store_data.name, store_data.engine
                     )
                     
-                    if woo_success:
+                    if platform_success:
                         await stores_collection.update_one(
                             {"_id": store_id},
                             {"$set": {"status": "READY", "url": store_url}}
                         )
                         break
-                    elif woo_error and "not installed" not in woo_error:
-                        # Fatal error (not just waiting for WordPress)
+                    elif platform_error and "not installed" not in platform_error:
+                        # Fatal error (not just waiting for platform)
                         await stores_collection.update_one(
                             {"_id": store_id},
-                            {"$set": {"status": "FAILED", "error": woo_error}}
+                            {"$set": {"status": "FAILED", "error": platform_error}}
                         )
                         raise HTTPException(
                             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Provisioning failed: {woo_error}"
+                            detail=f"Provisioning failed: {platform_error}"
                         )
-                    # else: WordPress not ready yet, keep waiting
+                    # else: Platform not ready yet, keep waiting
                     
                 await asyncio.sleep(10)
             else:
                 await stores_collection.update_one(
                     {"_id": store_id},
-                    {"$set": {"status": "FAILED", "error": "WooCommerce automation timed out"}}
+                    {"$set": {"status": "FAILED", "error": "Platform configuration timed out"}}
                 )
             
         except Exception as e:
@@ -161,11 +169,12 @@ async def create_store(store_data: StoreCreate):
         namespace = store_data.name
         host = f"{store_data.name}.127.0.0.1.nip.io"
         base_url = f"http://{host}"
-        store_url = f"{base_url}/shop/"
+        url_path = get_store_url_path(store_data.engine)
+        store_url = f"{base_url}{url_path}"
         
         try:
             # Generate Helm values and deploy (orchestrator test)
-            values_file = generate_values(store_data.name, host)
+            values_file = generate_values(store_data.name, host, store_data.engine)
             helm_output = install_store(store_data.name, namespace, values_file)
             print(f"✅ Helm deployment successful: {helm_output}")
             
