@@ -37,7 +37,7 @@ On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
 - `AWS_SECRET_ACCESS_KEY` — IAM user secret access key
 - `AWS_REGION` — AWS region (example: `ap-south-1`)
 - `ORCHESTRATOR_LAMBDA_FUNCTION_NAME` — target Lambda function name
-- `ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN` — Lambda execution role ARN used when function is created for the first time
+- `ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN` — Lambda execution role ARN (or IAM role name) used when function is created for the first time
 
 ### Lambda runtime settings
 - Runtime: `python3.11`

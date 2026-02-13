@@ -49,6 +49,32 @@ jobs:
           cd package
           zip -r ../dist/orchestrator-lambda.zip .
 
+      - name: Resolve Lambda execution role ARN
+        run: |
+          RAW_ROLE_VALUE="$(echo "$LAMBDA_EXECUTION_ROLE_ARN" | tr -d '[:space:]')"
+
+          if [[ -z "$RAW_ROLE_VALUE" ]]; then
+            echo "ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN secret is empty"
+            exit 1
+          fi
+
+          if [[ "$RAW_ROLE_VALUE" == arn:aws*:iam::*:role/* ]]; then
+            RESOLVED_ROLE_ARN="$RAW_ROLE_VALUE"
+          else
+            RESOLVED_ROLE_ARN=$(aws iam get-role \
+              --role-name "$RAW_ROLE_VALUE" \
+              --query 'Role.Arn' \
+              --output text)
+          fi
+
+          if [[ "$RESOLVED_ROLE_ARN" != arn:aws*:iam::*:role/* ]]; then
+            echo "Resolved role value is not a valid IAM role ARN: $RESOLVED_ROLE_ARN"
+            exit 1
+          fi
+
+          echo "Resolved execution role ARN for Lambda creation"
+          echo "RESOLVED_ROLE_ARN=$RESOLVED_ROLE_ARN" >> "$GITHUB_ENV"
+
       - name: Ensure Lambda function exists
         run: |
           if aws lambda get-function --function-name "$LAMBDA_FUNCTION_NAME" >/dev/null 2>&1; then
@@ -59,7 +85,7 @@ jobs:
               --function-name "$LAMBDA_FUNCTION_NAME" \
               --runtime python3.11 \
               --handler lambda_handler.handler \
-              --role "$LAMBDA_EXECUTION_ROLE_ARN" \
+              --role "$RESOLVED_ROLE_ARN" \
               --zip-file "fileb://orchestrator/dist/orchestrator-lambda.zip" \
               --timeout 900 \
               --memory-size 1024
