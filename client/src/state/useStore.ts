@@ -8,6 +8,7 @@ export interface Store {
   engine: 'woocommerce' | 'medusa'
   status: 'PROVISIONING' | 'READY' | 'FAILED'
   url?: string
+  password?: string
   created_at: string
   error?: string
   creator_id?: string
