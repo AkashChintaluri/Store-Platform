@@ -62,6 +62,7 @@ jobs:
           NODE_COUNT="${EKS_NODE_COUNT:-1}"
           NODE_INSTANCE_TYPE="${EKS_NODE_INSTANCE_TYPE:-t3.small}"
           ZONE="${EKS_AZ:-${REGION}a}"
+          ZONES_CSV="${ZONE},${ZONE}"
 
           if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
             echo "EKS cluster exists: $CLUSTER_NAME"
@@ -74,7 +75,7 @@ jobs:
               --nodegroup-name "$NODEGROUP_NAME" \
               --nodes "$NODE_COUNT" \
               --node-type "$NODE_INSTANCE_TYPE" \
-              --zones "$ZONE" \
+              --zones "$ZONES_CSV" \
               --with-oidc
           fi
 
@@ -86,6 +87,7 @@ jobs:
           NODE_COUNT="${EKS_NODE_COUNT:-1}"
           NODE_INSTANCE_TYPE="${EKS_NODE_INSTANCE_TYPE:-t3.small}"
           ZONE="${EKS_AZ:-${REGION}a}"
+          ZONES_CSV="${ZONE},${ZONE}"
 
           if aws eks describe-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NODEGROUP_NAME" --region "$REGION" >/dev/null 2>&1; then
             echo "EKS nodegroup exists: $NODEGROUP_NAME"
@@ -100,7 +102,7 @@ jobs:
               --nodes-min "$NODE_COUNT" \
               --nodes-max "$NODE_COUNT" \
               --node-type "$NODE_INSTANCE_TYPE" \
-              --zones "$ZONE"
+              --zones "$ZONES_CSV"
           fi
 
       - name: Ensure ECR repository exists
