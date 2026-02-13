@@ -21,3 +21,34 @@ This service handles store provisioning (Helm + adapters) separately from the AP
 - Helm, kubectl, and cluster access must be available to this service.
 - Keep the token in sync with API env `ORCHESTRATOR_TOKEN`.
 - Charts now live at `orchestrator/charts/store`; provisioner resolves them relative to this directory.
+
+## CI/CD to AWS Lambda
+
+Workflow: `.github/workflows/deploy-orchestrator-lambda.yml`
+
+On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
+1. Install orchestrator dependencies
+2. Package `app/`, `charts/`, and `lambda_handler.py`
+3. Create the target Lambda function only if it does not already exist
+4. Run `aws lambda update-function-code` on that same function name
+
+### Required GitHub repository secrets
+- `AWS_ACCESS_KEY_ID` — IAM user access key id
+- `AWS_SECRET_ACCESS_KEY` — IAM user secret access key
+- `AWS_REGION` — AWS region (example: `ap-south-1`)
+- `ORCHESTRATOR_LAMBDA_FUNCTION_NAME` — target Lambda function name
+- `ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN` — Lambda execution role ARN used when function is created for the first time
+
+### Lambda runtime settings
+- Runtime: `python3.11`
+- Handler: `lambda_handler.handler`
+
+### Lambda environment variables
+Set these in Lambda configuration:
+- `BACKEND_API_BASE`
+- `ORCHESTRATOR_TOKEN`
+- `ORCH_POLL_ATTEMPTS` (optional)
+- `ORCH_POLL_INTERVAL` (optional)
+- `ORCH_MOCK` (optional)
+- `APP_ENV` (optional)
+- `STORE_VALUES_FILE` (optional)
