@@ -134,6 +134,30 @@ jobs:
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
           kubectl get nodes
 
+      - name: Install ingress-nginx controller
+        run: |
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo update
+
+          kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply -f -
+
+          helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+            --namespace ingress-nginx \
+            --set controller.service.type=LoadBalancer \
+            --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-scheme"=internet-facing \
+            --set controller.service.annotations."service\.beta\.kubernetes\.io/aws-load-balancer-type"=nlb
+
+          kubectl -n ingress-nginx rollout status deployment/ingress-nginx-controller --timeout=300s
+
+      - name: Print ingress load balancer hostname
+        run: |
+          INGRESS_HOSTNAME=$(kubectl -n ingress-nginx get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [[ -z "$INGRESS_HOSTNAME" ]]; then
+            echo "Ingress LB hostname not ready yet. Check later with: kubectl -n ingress-nginx get svc ingress-nginx-controller"
+          else
+            echo "Ingress wildcard DNS target: $INGRESS_HOSTNAME"
+          fi
+
       - name: Apply orchestrator runtime secret
         env:
           BACKEND_API_BASE: ${{ secrets.BACKEND_API_BASE }}

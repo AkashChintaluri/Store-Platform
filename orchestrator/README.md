@@ -32,8 +32,9 @@ On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
 3. Build orchestrator Docker image from `orchestrator/Dockerfile`
 4. Push the image to Amazon ECR
 5. Configure kubectl context to your EKS cluster
-6. Create runtime secret if missing, otherwise preserve existing EKS secret values by default
-7. Apply deployment manifests and roll out update
+6. Install/upgrade ingress-nginx controller (idempotent)
+7. Create runtime secret if missing, otherwise preserve existing EKS secret values by default
+8. Apply deployment manifests and roll out update
 
 ### Required GitHub repository secrets
 - `AWS_ACCESS_KEY_ID` — IAM user access key id
@@ -64,3 +65,7 @@ On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
 
 ### Kubernetes manifests
 - `orchestrator/deploy/orchestrator-eks.yaml` creates namespace, service account, RBAC binding, deployment, and LoadBalancer service.
+
+### Wildcard DNS target
+- Workflow prints ingress LB hostname after deployment.
+- Use that hostname as DNS target for `*.yourdomain.com`.
