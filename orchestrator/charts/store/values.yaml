@@ -1,7 +1,7 @@
 store:
   name: ""
   engine: wordpress
-  host: ""
+  host: "*.akashchintaluri.com"
 
 resources:
   cpu: "500m"
@@ -29,6 +29,10 @@ wordpress:
 ingress:
   enabled: true
   className: nginx
+  hosts:
+    - host: "*.akashchintaluri.com"
+      paths:
+        - "/"
 
 woocommerceAutomation:
   enabled: false

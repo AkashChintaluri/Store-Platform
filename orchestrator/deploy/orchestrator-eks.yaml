@@ -80,6 +80,10 @@ spec:
                 secretKeyRef:
                   name: orchestrator-config
                   key: STORE_VALUES_FILE
+            - name: BASE_DOMAIN
+              value: "akashchintaluri.com"
+            - name: WILDCARD_DOMAIN
+              value: "*.akashchintaluri.com"
           resources:
             requests:
               cpu: "250m"
