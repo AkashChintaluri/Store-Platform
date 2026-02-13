@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orchestrator-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchestrator-sa
+  namespace: orchestrator-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orchestrator-cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: orchestrator-sa
+    namespace: orchestrator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestrator
+  namespace: orchestrator-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orchestrator
+  template:
+    metadata:
+      labels:
+        app: orchestrator
+    spec:
+      serviceAccountName: orchestrator-sa
+      containers:
+        - name: orchestrator
+          image: __ORCHESTRATOR_IMAGE__
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9000
+          env:
+            - name: BACKEND_API_BASE
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: BACKEND_API_BASE
+            - name: ORCHESTRATOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: ORCHESTRATOR_TOKEN
+            - name: ORCH_POLL_ATTEMPTS
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: ORCH_POLL_ATTEMPTS
+            - name: ORCH_POLL_INTERVAL
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: ORCH_POLL_INTERVAL
+            - name: ORCH_MOCK
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: ORCH_MOCK
+            - name: APP_ENV
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: APP_ENV
+            - name: STORE_VALUES_FILE
+              valueFrom:
+                secretKeyRef:
+                  name: orchestrator-config
+                  key: STORE_VALUES_FILE
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1024Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestrator
+  namespace: orchestrator-system
+spec:
+  selector:
+    app: orchestrator
+  ports:
+    - name: http
+      protocol: TCP
+      port: 9000
+      targetPort: 9000
+  type: LoadBalancer

@@ -1,0 +1,158 @@
+name: Deploy Orchestrator to EKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "orchestrator/**"
+      - ".github/workflows/deploy-orchestrator-eks.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+  ECR_REPOSITORY: ${{ secrets.ORCHESTRATOR_ECR_REPOSITORY }}
+  EKS_NODEGROUP_NAME: ${{ secrets.EKS_NODEGROUP_NAME }}
+  EKS_NODE_INSTANCE_TYPE: ${{ secrets.EKS_NODE_INSTANCE_TYPE }}
+  EKS_NODE_COUNT: ${{ secrets.EKS_NODE_COUNT }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate required inputs
+        run: |
+          required=(AWS_REGION EKS_CLUSTER_NAME ECR_REPOSITORY)
+          for key in "${required[@]}"; do
+            val="${!key}"
+            if [[ -z "$val" ]]; then
+              echo "Missing required secret/value: $key"
+              exit 1
+            fi
+          done
+
+      - name: Install eksctl
+        run: |
+          curl -sSL "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" -o eksctl.tar.gz
+          tar -xzf eksctl.tar.gz
+          sudo mv eksctl /usr/local/bin/eksctl
+          eksctl version
+
+      - name: Ensure EKS cluster exists
+        run: |
+          CLUSTER_NAME="$EKS_CLUSTER_NAME"
+          REGION="$AWS_REGION"
+          NODEGROUP_NAME="${EKS_NODEGROUP_NAME:-orchestrator-ng}"
+          NODE_COUNT="${EKS_NODE_COUNT:-2}"
+          NODE_INSTANCE_TYPE="${EKS_NODE_INSTANCE_TYPE:-t3.medium}"
+
+          if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
+            echo "EKS cluster exists: $CLUSTER_NAME"
+          else
+            echo "Creating EKS cluster: $CLUSTER_NAME"
+            eksctl create cluster \
+              --name "$CLUSTER_NAME" \
+              --region "$REGION" \
+              --managed \
+              --nodegroup-name "$NODEGROUP_NAME" \
+              --nodes "$NODE_COUNT" \
+              --node-type "$NODE_INSTANCE_TYPE" \
+              --with-oidc
+          fi
+
+      - name: Ensure EKS nodegroup exists
+        run: |
+          CLUSTER_NAME="$EKS_CLUSTER_NAME"
+          REGION="$AWS_REGION"
+          NODEGROUP_NAME="${EKS_NODEGROUP_NAME:-orchestrator-ng}"
+          NODE_COUNT="${EKS_NODE_COUNT:-2}"
+          NODE_INSTANCE_TYPE="${EKS_NODE_INSTANCE_TYPE:-t3.medium}"
+
+          if aws eks describe-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NODEGROUP_NAME" --region "$REGION" >/dev/null 2>&1; then
+            echo "EKS nodegroup exists: $NODEGROUP_NAME"
+          else
+            echo "Creating EKS nodegroup: $NODEGROUP_NAME"
+            eksctl create nodegroup \
+              --cluster "$CLUSTER_NAME" \
+              --region "$REGION" \
+              --name "$NODEGROUP_NAME" \
+              --managed \
+              --nodes "$NODE_COUNT" \
+              --node-type "$NODE_INSTANCE_TYPE"
+          fi
+
+      - name: Ensure ECR repository exists
+        run: |
+          if aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "ECR repository exists: $ECR_REPOSITORY"
+          else
+            aws ecr create-repository --repository-name "$ECR_REPOSITORY" --region "$AWS_REGION" >/dev/null
+            echo "Created ECR repository: $ECR_REPOSITORY"
+          fi
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push orchestrator image
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          IMAGE_TAG=${GITHUB_SHA}
+          IMAGE_URI="$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          docker build -t "$IMAGE_URI" ./orchestrator
+          docker push "$IMAGE_URI"
+
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+          echo "Pushed image: $IMAGE_URI"
+
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          kubectl get nodes
+
+      - name: Apply orchestrator runtime secret
+        env:
+          BACKEND_API_BASE: ${{ secrets.BACKEND_API_BASE }}
+          ORCHESTRATOR_TOKEN: ${{ secrets.ORCHESTRATOR_TOKEN }}
+          ORCH_POLL_ATTEMPTS: ${{ secrets.ORCH_POLL_ATTEMPTS }}
+          ORCH_POLL_INTERVAL: ${{ secrets.ORCH_POLL_INTERVAL }}
+          ORCH_MOCK: ${{ secrets.ORCH_MOCK }}
+          APP_ENV: ${{ secrets.APP_ENV }}
+          STORE_VALUES_FILE: ${{ secrets.STORE_VALUES_FILE }}
+        run: |
+          kubectl create namespace orchestrator-system --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl -n orchestrator-system create secret generic orchestrator-config \
+            --from-literal=BACKEND_API_BASE="${BACKEND_API_BASE}" \
+            --from-literal=ORCHESTRATOR_TOKEN="${ORCHESTRATOR_TOKEN}" \
+            --from-literal=ORCH_POLL_ATTEMPTS="${ORCH_POLL_ATTEMPTS:-30}" \
+            --from-literal=ORCH_POLL_INTERVAL="${ORCH_POLL_INTERVAL:-10}" \
+            --from-literal=ORCH_MOCK="${ORCH_MOCK:-0}" \
+            --from-literal=APP_ENV="${APP_ENV:-production}" \
+            --from-literal=STORE_VALUES_FILE="${STORE_VALUES_FILE}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy orchestrator to EKS
+        run: |
+          sed "s|__ORCHESTRATOR_IMAGE__|$IMAGE_URI|g" orchestrator/deploy/orchestrator-eks.yaml | kubectl apply -f -
+          kubectl -n orchestrator-system rollout status deployment/orchestrator --timeout=300s
+
+      - name: Print orchestrator endpoint
+        run: |
+          kubectl -n orchestrator-system get svc orchestrator -o wide

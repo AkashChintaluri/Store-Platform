@@ -258,6 +258,35 @@ This FastAPI application can be easily deployed to:
 
 ## Contributing
 
+## CI/CD to AWS Lightsail
+
+Workflow: `.github/workflows/deploy-backend-lightsail.yml`
+
+On push to `main` (changes under `server/**`), GitHub Actions will:
+1. Build backend Docker image from `server/Dockerfile`
+2. Push image to Lightsail container service registry
+3. Create/update Lightsail deployment and expose port `8000`
+
+### Required GitHub repository secrets
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION` (example: `ap-south-1`)
+- `LIGHTSAIL_SERVICE_NAME`
+- `MONGODB_URI`
+- `MONGODB_DB`
+- `JWT_SECRET`
+- `JWT_ALGORITHM`
+- `ORCHESTRATOR_URL`
+- `ORCHESTRATOR_TOKEN`
+- `ALLOWED_ORIGINS`
+
+### Optional secrets
+- `JWT_EXPIRE_MINUTES` (default `30`)
+- `STORE_BASE_DOMAIN`
+- `STORE_BASE_PORT`
+- `LIGHTSAIL_SERVICE_POWER` (used only if service must be created; default `nano`)
+- `LIGHTSAIL_SERVICE_SCALE` (used only if service must be created; default `1`)
+
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes

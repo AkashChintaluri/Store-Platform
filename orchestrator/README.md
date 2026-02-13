@@ -1,6 +1,6 @@
 # Orchestrator Service
 
-This service handles store provisioning (Helm + adapters) separately from the API. Run it as its own process or package for Lambda/containers.
+This service handles store provisioning (Helm + adapters) separately from the API. Run it as its own process in Kubernetes.
 
 ## Layout
 - `app/helm.py` — Helm execution helper
@@ -22,33 +22,37 @@ This service handles store provisioning (Helm + adapters) separately from the AP
 - Keep the token in sync with API env `ORCHESTRATOR_TOKEN`.
 - Charts now live at `orchestrator/charts/store`; provisioner resolves them relative to this directory.
 
-## CI/CD to AWS Lambda
+## CI/CD to AWS EKS
 
-Workflow: `.github/workflows/deploy-orchestrator-lambda.yml`
+Workflow: `.github/workflows/deploy-orchestrator-eks.yml`
 
 On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
-1. Install orchestrator dependencies
-2. Package `app/`, `charts/`, and `lambda_handler.py`
-3. Create the target Lambda function only if it does not already exist
-4. Run `aws lambda update-function-code` on that same function name
+1. Create EKS cluster if it does not exist
+2. Create nodegroup if it does not exist
+3. Build orchestrator Docker image from `orchestrator/Dockerfile`
+4. Push the image to Amazon ECR
+5. Configure kubectl context to your EKS cluster
+6. Apply/update runtime secrets
+7. Apply deployment manifests and roll out update
 
 ### Required GitHub repository secrets
 - `AWS_ACCESS_KEY_ID` — IAM user access key id
 - `AWS_SECRET_ACCESS_KEY` — IAM user secret access key
 - `AWS_REGION` — AWS region (example: `ap-south-1`)
-- `ORCHESTRATOR_LAMBDA_FUNCTION_NAME` — target Lambda function name
-- `ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN` — Lambda execution role ARN (or IAM role name) used when function is created for the first time
-
-### Lambda runtime settings
-- Runtime: `python3.11`
-- Handler: `lambda_handler.handler`
-
-### Lambda environment variables
-Set these in Lambda configuration:
+- `EKS_CLUSTER_NAME` — target EKS cluster name
+- `ORCHESTRATOR_ECR_REPOSITORY` — ECR repository name for orchestrator image
 - `BACKEND_API_BASE`
 - `ORCHESTRATOR_TOKEN`
-- `ORCH_POLL_ATTEMPTS` (optional)
-- `ORCH_POLL_INTERVAL` (optional)
-- `ORCH_MOCK` (optional)
-- `APP_ENV` (optional)
-- `STORE_VALUES_FILE` (optional)
+
+### Optional GitHub repository secrets
+- `ORCH_POLL_ATTEMPTS` (default `30`)
+- `ORCH_POLL_INTERVAL` (default `10`)
+- `ORCH_MOCK` (default `0`)
+- `APP_ENV` (default `production`)
+- `STORE_VALUES_FILE` (default empty)
+- `EKS_NODEGROUP_NAME` (default `orchestrator-ng`)
+- `EKS_NODE_INSTANCE_TYPE` (default `t3.medium`)
+- `EKS_NODE_COUNT` (default `2`)
+
+### Kubernetes manifests
+- `orchestrator/deploy/orchestrator-eks.yaml` creates namespace, service account, RBAC binding, deployment, and LoadBalancer service.

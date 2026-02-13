@@ -1,0 +1,224 @@
+name: Deploy Backend to Lightsail
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/deploy-backend-lightsail.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  LIGHTSAIL_SERVICE_NAME: ${{ secrets.LIGHTSAIL_SERVICE_NAME }}
+  LIGHTSAIL_CONTAINER_NAME: backend
+  LIGHTSAIL_LABEL: backend-api
+  LIGHTSAIL_SERVICE_POWER: ${{ secrets.LIGHTSAIL_SERVICE_POWER }}
+  LIGHTSAIL_SERVICE_SCALE: ${{ secrets.LIGHTSAIL_SERVICE_SCALE }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify required secrets
+        run: |
+          required=(
+            AWS_REGION
+            LIGHTSAIL_SERVICE_NAME
+            MONGODB_URI
+            MONGODB_DB
+            JWT_SECRET
+            JWT_ALGORITHM
+            ORCHESTRATOR_URL
+            ORCHESTRATOR_TOKEN
+            ALLOWED_ORIGINS
+          )
+
+          for key in "${required[@]}"; do
+            value="${!key}"
+            if [[ -z "$value" ]]; then
+              echo "Missing required secret/value: $key"
+              exit 1
+            fi
+          done
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DB: ${{ secrets.MONGODB_DB }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_ALGORITHM: ${{ secrets.JWT_ALGORITHM }}
+          ORCHESTRATOR_URL: ${{ secrets.ORCHESTRATOR_URL }}
+          ORCHESTRATOR_TOKEN: ${{ secrets.ORCHESTRATOR_TOKEN }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+
+      - name: Build backend image
+        run: |
+          docker build -t backend-api:latest ./server
+
+      - name: Ensure Lightsail service exists
+        run: |
+          if aws lightsail get-container-services --service-name "$LIGHTSAIL_SERVICE_NAME" --region "$AWS_REGION" >/dev/null 2>&1; then
+            echo "Lightsail service exists: $LIGHTSAIL_SERVICE_NAME"
+            echo "LIGHTSAIL_SERVICE_CREATED=0" >> "$GITHUB_ENV"
+          else
+            POWER="${LIGHTSAIL_SERVICE_POWER:-nano}"
+            SCALE="${LIGHTSAIL_SERVICE_SCALE:-1}"
+            echo "Creating Lightsail container service: $LIGHTSAIL_SERVICE_NAME (power=$POWER, scale=$SCALE)"
+            aws lightsail create-container-service \
+              --service-name "$LIGHTSAIL_SERVICE_NAME" \
+              --power "$POWER" \
+              --scale "$SCALE" \
+              --region "$AWS_REGION"
+            echo "LIGHTSAIL_SERVICE_CREATED=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Wait for first-time service creation
+        if: env.LIGHTSAIL_SERVICE_CREATED == '1'
+        run: |
+          for i in {1..40}; do
+            STATE=$(aws lightsail get-container-services \
+              --service-name "$LIGHTSAIL_SERVICE_NAME" \
+              --region "$AWS_REGION" \
+              --query 'containerServices[0].state' \
+              --output text)
+
+            echo "Service state after create: $STATE"
+
+            if [[ "$STATE" == "READY" || "$STATE" == "RUNNING" ]]; then
+              echo "Service is ready for deployment"
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "Newly created service did not become ready in time"
+          exit 1
+
+      - name: Push image to Lightsail
+        run: |
+          IMAGE_NAME=$(aws lightsail push-container-image \
+            --service-name "$LIGHTSAIL_SERVICE_NAME" \
+            --label "$LIGHTSAIL_LABEL" \
+            --image backend-api:latest \
+            --region "$AWS_REGION" \
+            --query 'image' \
+            --output text)
+
+          if [[ -z "$IMAGE_NAME" || "$IMAGE_NAME" == "None" ]]; then
+            echo "Failed to get pushed image name from Lightsail"
+            exit 1
+          fi
+
+          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
+          echo "Pushed image: $IMAGE_NAME"
+
+      - name: Create deployment spec
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          image_name = os.environ["IMAGE_NAME"]
+          container_name = os.environ.get("LIGHTSAIL_CONTAINER_NAME", "backend")
+
+          environment = {
+              "MONGODB_URI": os.environ["MONGODB_URI"],
+              "MONGODB_DB": os.environ["MONGODB_DB"],
+              "JWT_SECRET": os.environ["JWT_SECRET"],
+              "JWT_ALGORITHM": os.environ["JWT_ALGORITHM"],
+              "JWT_EXPIRE_MINUTES": os.environ.get("JWT_EXPIRE_MINUTES", "30"),
+              "ORCHESTRATOR_URL": os.environ["ORCHESTRATOR_URL"],
+              "ORCHESTRATOR_TOKEN": os.environ["ORCHESTRATOR_TOKEN"],
+              "ALLOWED_ORIGINS": os.environ["ALLOWED_ORIGINS"],
+              "STORE_BASE_DOMAIN": os.environ.get("STORE_BASE_DOMAIN", ""),
+              "STORE_BASE_PORT": os.environ.get("STORE_BASE_PORT", ""),
+          }
+
+          containers = {
+              container_name: {
+                  "image": image_name,
+                  "ports": {"8000": "HTTP"},
+                  "environment": environment,
+              }
+          }
+
+          public_endpoint = {
+              "containerName": container_name,
+              "containerPort": 8000,
+              "healthCheck": {
+                  "path": "/health",
+                  "successCodes": "200-399",
+                  "intervalSeconds": 10,
+                  "timeoutSeconds": 5,
+                  "healthyThreshold": 2,
+                  "unhealthyThreshold": 2,
+              },
+          }
+
+          with open("containers.json", "w", encoding="utf-8") as f:
+              json.dump(containers, f)
+
+          with open("public-endpoint.json", "w", encoding="utf-8") as f:
+              json.dump(public_endpoint, f)
+          PY
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_DB: ${{ secrets.MONGODB_DB }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_ALGORITHM: ${{ secrets.JWT_ALGORITHM }}
+          JWT_EXPIRE_MINUTES: ${{ secrets.JWT_EXPIRE_MINUTES }}
+          ORCHESTRATOR_URL: ${{ secrets.ORCHESTRATOR_URL }}
+          ORCHESTRATOR_TOKEN: ${{ secrets.ORCHESTRATOR_TOKEN }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS }}
+          STORE_BASE_DOMAIN: ${{ secrets.STORE_BASE_DOMAIN }}
+          STORE_BASE_PORT: ${{ secrets.STORE_BASE_PORT }}
+
+      - name: Deploy to Lightsail
+        run: |
+          aws lightsail create-container-service-deployment \
+            --service-name "$LIGHTSAIL_SERVICE_NAME" \
+            --containers file://containers.json \
+            --public-endpoint file://public-endpoint.json \
+            --region "$AWS_REGION"
+
+      - name: Wait for deployment and print endpoint
+        run: |
+          for i in {1..40}; do
+            STATE=$(aws lightsail get-container-services \
+              --service-name "$LIGHTSAIL_SERVICE_NAME" \
+              --region "$AWS_REGION" \
+              --query 'containerServices[0].state' \
+              --output text)
+
+            URL=$(aws lightsail get-container-services \
+              --service-name "$LIGHTSAIL_SERVICE_NAME" \
+              --region "$AWS_REGION" \
+              --query 'containerServices[0].url' \
+              --output text)
+
+            echo "Service state: $STATE"
+
+            if [[ "$STATE" == "RUNNING" ]]; then
+              echo "Backend deployed: $URL"
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "Deployment did not reach RUNNING state in time"
+          exit 1
