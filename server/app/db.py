@@ -20,13 +20,12 @@ async def connect_to_mongo():
     database_name = os.getenv("MONGODB_DB", "store_platform")
     
     try:
-        # For Atlas, we need specific SSL/TLS settings for Python compatibility
+        # For Atlas with Windows SSL compatibility
         db.client = AsyncIOMotorClient(
             mongodb_uri,
-            serverSelectionTimeoutMS=15000,  # Increased timeout
+            serverSelectionTimeoutMS=15000,
             connectTimeoutMS=15000,
             socketTimeoutMS=15000,
-            # TLS settings for Atlas compatibility
             tls=True,
             tlsAllowInvalidCertificates=True
         )

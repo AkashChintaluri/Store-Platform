@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { useAuth } from './useAuth'
+import { API_BASE } from '../config'
 
 export interface Store {
   id: string
@@ -8,6 +10,8 @@ export interface Store {
   url?: string
   created_at: string
   error?: string
+  creator_id?: string
+  creator_name?: string
 }
 
 type CreateStorePayload = {
@@ -23,7 +27,15 @@ type StoreState = {
   deleteStore: (id: string) => Promise<void>
 }
 
-const API_BASE = '/api/stores'
+const STORES_BASE = `${API_BASE}/stores`
+
+const getAuthHeaders = () => {
+  const token = useAuth.getState().token
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }
+}
 
 export const useStore = create<StoreState>((set) => ({
   stores: [],
@@ -31,7 +43,9 @@ export const useStore = create<StoreState>((set) => ({
   fetchStores: async () => {
     set({ loading: true })
     try {
-      const response = await fetch(API_BASE)
+      const response = await fetch(STORES_BASE, {
+        headers: getAuthHeaders(),
+      })
       if (!response.ok) {
         throw new Error('Failed to fetch stores')
       }
@@ -42,9 +56,9 @@ export const useStore = create<StoreState>((set) => ({
     }
   },
   createStore: async (payload) => {
-    const response = await fetch(API_BASE, {
+    const response = await fetch(STORES_BASE, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     })
     if (!response.ok) {
@@ -57,7 +71,10 @@ export const useStore = create<StoreState>((set) => ({
     set((state) => ({ stores: [data, ...state.stores] }))
   },
   deleteStore: async (id) => {
-    const response = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' })
+    const response = await fetch(`${STORES_BASE}/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    })
     if (!response.ok) {
       throw new Error('Failed to delete store')
     }

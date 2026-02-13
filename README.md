@@ -2,9 +2,19 @@
 
 A **Kubernetes-based e-commerce store deployment platform** with support for multiple store engines (WooCommerce, Medusa, and more) using a **type erasure adapter pattern** for extensibility.
 
-## 🆕 What's New: Type Erasure Adapter System
+## 🆕 What's New
 
-The platform now features a **type erasure adapter pattern** that makes adding new e-commerce platforms incredibly simple:
+### 🔐 Authentication & Authorization (NEW!)
+- ✅ **User Management** - Secure signup and login with JWT authentication
+- ✅ **Store Ownership** - Track who created each store
+- ✅ **Access Control** - Users can only manage their own stores
+- ✅ **Session Management** - Persistent sessions with automatic token refresh
+
+👉 **See**: [AUTH_IMPLEMENTATION.md](AUTH_IMPLEMENTATION.md) for complete documentation.
+
+### Type Erasure Adapter System
+
+The platform features a **type erasure adapter pattern** that makes adding new e-commerce platforms incredibly simple:
 
 - ✅ **WooCommerce** - Fully implemented and production-ready
 - 🚧 **Medusa** - Interface ready, implementation pending
@@ -18,6 +28,7 @@ The platform now features a **type erasure adapter pattern** that makes adding n
 
 ## ✨ Key Features
 
+- 🔐 **Authentication & Authorization** - JWT-based user authentication with store ownership tracking
 - 🏪 **Multi-Platform Support** - WooCommerce (fully implemented), Medusa (ready for implementation), and easy to add more
 - 🔌 **Type Erasure Architecture** - Add new platforms without modifying core orchestration code
 - ☸️ **Kubernetes-Native** - Each store is an isolated Helm release with dedicated namespace
@@ -28,18 +39,26 @@ The platform now features a **type erasure adapter pattern** that makes adding n
 
 ## Architecture Overview
 
+### Deployment Layout (3 parts)
+- **Frontend (Amplify)**: React app built with `npm run build`. Set `VITE_API_BASE` to your backend API (e.g., `https://api.example.com/api`).
+- **Backend API (Lightsail)**: FastAPI service with MongoDB. Configure `ALLOWED_ORIGINS` for your Amplify domain, `MONGODB_URI`, `JWT_SECRET_KEY`, and `ORCHESTRATOR_URL`/`ORCHESTRATOR_TOKEN` when using an external orchestrator.
+- **Orchestrator (Lambda or separate service)**: Accepts jobs from backend at `ORCHESTRATOR_URL`, then calls back to `POST /api/stores/{store_id}/status` with header `X-Orchestrator-Token: <ORCHESTRATOR_TOKEN>` to mark stores READY/FAILED and attach URLs/passwords. For local dev, leave `ORCHESTRATOR_URL` unset and the backend will provision inline.
+
 The Store Platform uses a **three-tier architecture** with a unique **adapter pattern** for multi-platform support:
 
 ### 1. **FastAPI Backend** (`server/`)
 - **REST API** - Store lifecycle management (create, list, delete)
+- **Authentication** - JWT-based user authentication and authorization
 - **Adapter System** - Type erasure pattern for platform-agnostic orchestration
 - **MongoDB Atlas** - Persistent store metadata and state
 - **Kubernetes Orchestration** - Helm-based deployment automation
 
 ### 2. **React Frontend** (`client/`)
+- **Authentication UI** - Login and signup pages
 - **Store Dashboard** - Create and monitor stores
 - **Real-time Updates** - Live store status and health
 - **Multi-Platform UI** - Select engine type during creation
+- **User Management** - Session handling and logout
 
 ### 3. **Helm-Based Deployment** (`charts/`)
 - **Isolated Releases** - Each store is an independent Helm release
@@ -112,28 +131,41 @@ The Store Platform uses a **three-tier architecture** with a unique **adapter pa
 
 ### Quick Start
 
-1. **Start the Backend API**:
+1. **Setup Backend API**:
    ```bash
    cd server
    cp .env.example .env
-   # Edit .env with your MongoDB Atlas connection
+   # Edit .env with:
+   # - MongoDB Atlas connection: MONGODB_URI=mongodb+srv://...
+   # - JWT secret: JWT_SECRET_KEY=your-random-secret-key
+   
    pip install -r requirements.txt
    python main.py
    ```
 
-2. **Start the Frontend Dashboard**:
+2. **Start Frontend Dashboard**:
    ```bash
    cd client
    npm install
    npm run dev
    ```
 
-3. **Create a Store** (API handles Helm deployment automatically):
-   ```bash
-   # Create WooCommerce store
-   curl -X POST "http://localhost:8000/api/stores" \
-     -H "Content-Type: application/json" \
-     -d '{"name": "my-store", "engine": "woocommerce"}'
+3. **Create Your Account**:
+   - Visit http://localhost:5173
+   - Click "Sign up"
+   - Enter your name, email, and password
+   - You're automatically logged in!
+
+4. **Create Your First Store**:
+   - Click "Create Store" button
+   - Enter store name and select engine (WooCommerce)
+   - Wait for provisioning (~2-3 minutes)
+   - Your store is ready!
+   
+5. **Access Your Store**:
+   - **Storefront**: Click the URL in the table (e.g., `http://my-store.localhost/shop/`)
+   - **Admin Panel**: Click store name to expand, then click admin URL
+   - **Credentials**: Username `user`, password shown in expanded view
    
    # Or create Medusa store (when implemented)
    curl -X POST "http://localhost:8000/api/stores" \

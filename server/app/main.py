@@ -1,31 +1,45 @@
 """
 FastAPI application setup with MongoDB integration.
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .db import connect_to_mongo, close_mongo_connection
 from .routes.stores import router as stores_router
+from .routes.auth import router as auth_router
 
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
+    allowed_origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
+    # Initialize rate limiter
+    limiter = Limiter(key_func=get_remote_address)
+    
     app = FastAPI(
         title="Store Platform API",
         description="API for managing store deployments",
         version="1.0.0"
     )
+    
+    # Add rate limiter to app state
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
     # Include routers
+    app.include_router(auth_router)
     app.include_router(stores_router)
 
     # Database lifecycle events

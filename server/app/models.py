@@ -25,14 +25,30 @@ class StoreResponse(BaseModel):
     created_at: datetime
     error: Optional[str] = None
     password: Optional[str] = None
+    creator_id: Optional[str] = None
+    creator_name: Optional[str] = None
 
 
-# Future auth models (when authentication is added)
-class UserCreate(BaseModel):
-    """Model for creating a new user"""
+class StoreStatusUpdate(BaseModel):
+    """Model for orchestrator status callbacks"""
+    status: Literal["PROVISIONING", "READY", "FAILED"]
+    url: Optional[str] = None
+    error: Optional[str] = None
+    password: Optional[str] = None
+
+
+# Auth models
+class UserSignup(BaseModel):
+    """Model for user signup"""
     email: EmailStr
     password: str
     name: str
+
+
+class UserLogin(BaseModel):
+    """Model for user login"""
+    email: EmailStr
+    password: str
 
 
 class UserResponse(BaseModel):
@@ -41,13 +57,13 @@ class UserResponse(BaseModel):
     email: str
     name: str
     created_at: datetime
-    is_active: bool
 
 
-class SessionCreate(BaseModel):
-    """Model for creating a user session"""
-    user_id: str
-    expires_at: datetime
+class TokenResponse(BaseModel):
+    """Model for auth token response"""
+    access_token: str
+    token_type: str
+    user: UserResponse
 
 
 class SessionResponse(BaseModel):
