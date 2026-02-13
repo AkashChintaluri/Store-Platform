@@ -32,7 +32,7 @@ On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
 3. Build orchestrator Docker image from `orchestrator/Dockerfile`
 4. Push the image to Amazon ECR
 5. Configure kubectl context to your EKS cluster
-6. Apply/update runtime secrets
+6. Create runtime secret if missing, otherwise preserve existing EKS secret values by default
 7. Apply deployment manifests and roll out update
 
 ### Required GitHub repository secrets
@@ -51,8 +51,16 @@ On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
 - `APP_ENV` (default `production`)
 - `STORE_VALUES_FILE` (default empty)
 - `EKS_NODEGROUP_NAME` (default `orchestrator-ng`)
-- `EKS_NODE_INSTANCE_TYPE` (default `t3.medium`)
-- `EKS_NODE_COUNT` (default `2`)
+- `EKS_NODE_INSTANCE_TYPE` (default `t3.small` for MVP)
+- `EKS_NODE_COUNT` (default `1` for MVP)
+- `EKS_AZ` (default `<AWS_REGION>a`, single-AZ for MVP cost optimization)
+- `ORCHESTRATOR_SECRET_FORCE_SYNC` (`1` to force overwrite EKS secret from GitHub secrets; default preserve existing)
+
+### Runtime secret behavior (Option B)
+- Secret name: `orchestrator-config` in namespace `orchestrator-system`
+- If secret exists: workflow keeps current EKS values (no overwrite)
+- If secret does not exist: workflow creates it with GitHub secrets or safe defaults
+- To intentionally overwrite values from GitHub, set `ORCHESTRATOR_SECRET_FORCE_SYNC=1`
 
 ### Kubernetes manifests
 - `orchestrator/deploy/orchestrator-eks.yaml` creates namespace, service account, RBAC binding, deployment, and LoadBalancer service.
