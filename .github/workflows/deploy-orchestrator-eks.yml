@@ -18,7 +18,7 @@ env:
   EKS_NODEGROUP_NAME: ${{ secrets.EKS_NODEGROUP_NAME }}
   EKS_NODE_INSTANCE_TYPE: ${{ secrets.EKS_NODE_INSTANCE_TYPE }}
   EKS_NODE_COUNT: ${{ secrets.EKS_NODE_COUNT }}
-  EKS_AZ: ${{ secrets.EKS_AZ }}
+  EKS_AZS: ${{ secrets.EKS_AZS }}
   ORCHESTRATOR_SECRET_FORCE_SYNC: ${{ secrets.ORCHESTRATOR_SECRET_FORCE_SYNC }}
 
 jobs:
@@ -61,13 +61,12 @@ jobs:
           NODEGROUP_NAME="${EKS_NODEGROUP_NAME:-orchestrator-ng}"
           NODE_COUNT="${EKS_NODE_COUNT:-1}"
           NODE_INSTANCE_TYPE="${EKS_NODE_INSTANCE_TYPE:-t3.small}"
-          ZONE="${EKS_AZ:-${REGION}a}"
-          ZONES_CSV="${ZONE},${ZONE}"
+          ZONES_CSV="${EKS_AZS:-${REGION}a,${REGION}b}"
 
           if aws eks describe-cluster --name "$CLUSTER_NAME" --region "$REGION" >/dev/null 2>&1; then
             echo "EKS cluster exists: $CLUSTER_NAME"
           else
-            echo "Creating MVP EKS cluster: $CLUSTER_NAME (zone=$ZONE, nodeType=$NODE_INSTANCE_TYPE, nodes=$NODE_COUNT)"
+            echo "Creating MVP EKS cluster: $CLUSTER_NAME (zones=$ZONES_CSV, nodeType=$NODE_INSTANCE_TYPE, nodes=$NODE_COUNT)"
             eksctl create cluster \
               --name "$CLUSTER_NAME" \
               --region "$REGION" \
@@ -86,8 +85,7 @@ jobs:
           NODEGROUP_NAME="${EKS_NODEGROUP_NAME:-orchestrator-ng}"
           NODE_COUNT="${EKS_NODE_COUNT:-1}"
           NODE_INSTANCE_TYPE="${EKS_NODE_INSTANCE_TYPE:-t3.small}"
-          ZONE="${EKS_AZ:-${REGION}a}"
-          ZONES_CSV="${ZONE},${ZONE}"
+          ZONES_CSV="${EKS_AZS:-${REGION}a,${REGION}b}"
 
           if aws eks describe-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "$NODEGROUP_NAME" --region "$REGION" >/dev/null 2>&1; then
             echo "EKS nodegroup exists: $NODEGROUP_NAME"

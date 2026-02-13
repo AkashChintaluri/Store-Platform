@@ -53,7 +53,7 @@ On push to `main` (changes under `orchestrator/**`), GitHub Actions will:
 - `EKS_NODEGROUP_NAME` (default `orchestrator-ng`)
 - `EKS_NODE_INSTANCE_TYPE` (default `t3.small` for MVP)
 - `EKS_NODE_COUNT` (default `1` for MVP)
-- `EKS_AZ` (default `<AWS_REGION>a`, single-AZ for MVP cost optimization)
+- `EKS_AZS` (default `<AWS_REGION>a,<AWS_REGION>b`; EKS requires at least 2 AZs)
 - `ORCHESTRATOR_SECRET_FORCE_SYNC` (`1` to force overwrite EKS secret from GitHub secrets; default preserve existing)
 
 ### Runtime secret behavior (Option B)
