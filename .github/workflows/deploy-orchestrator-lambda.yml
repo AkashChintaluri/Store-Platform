@@ -49,37 +49,37 @@ jobs:
           cd package
           zip -r ../dist/orchestrator-lambda.zip .
 
-      - name: Resolve Lambda execution role ARN
-        run: |
-          RAW_ROLE_VALUE="$(echo "$LAMBDA_EXECUTION_ROLE_ARN" | tr -d '[:space:]')"
-
-          if [[ -z "$RAW_ROLE_VALUE" ]]; then
-            echo "ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN secret is empty"
-            exit 1
-          fi
-
-          if [[ "$RAW_ROLE_VALUE" == arn:aws*:iam::*:role/* ]]; then
-            RESOLVED_ROLE_ARN="$RAW_ROLE_VALUE"
-          else
-            RESOLVED_ROLE_ARN=$(aws iam get-role \
-              --role-name "$RAW_ROLE_VALUE" \
-              --query 'Role.Arn' \
-              --output text)
-          fi
-
-          if [[ "$RESOLVED_ROLE_ARN" != arn:aws*:iam::*:role/* ]]; then
-            echo "Resolved role value is not a valid IAM role ARN: $RESOLVED_ROLE_ARN"
-            exit 1
-          fi
-
-          echo "Resolved execution role ARN for Lambda creation"
-          echo "RESOLVED_ROLE_ARN=$RESOLVED_ROLE_ARN" >> "$GITHUB_ENV"
-
       - name: Ensure Lambda function exists
         run: |
           if aws lambda get-function --function-name "$LAMBDA_FUNCTION_NAME" >/dev/null 2>&1; then
             echo "Lambda function exists: $LAMBDA_FUNCTION_NAME"
           else
+            RAW_ROLE_VALUE="$(echo "$LAMBDA_EXECUTION_ROLE_ARN" | tr -d '[:space:]')"
+
+            if [[ -z "$RAW_ROLE_VALUE" ]]; then
+              echo "ORCHESTRATOR_LAMBDA_EXECUTION_ROLE_ARN secret is required when creating Lambda"
+              exit 1
+            fi
+
+            if [[ "$RAW_ROLE_VALUE" == arn:aws*:iam::*:user/* ]]; then
+              echo "Invalid value: IAM user ARN provided. Lambda requires an IAM role ARN (arn:...:role/...)"
+              exit 1
+            fi
+
+            if [[ "$RAW_ROLE_VALUE" == arn:aws*:iam::*:role/* ]]; then
+              RESOLVED_ROLE_ARN="$RAW_ROLE_VALUE"
+            else
+              RESOLVED_ROLE_ARN=$(aws iam get-role \
+                --role-name "$RAW_ROLE_VALUE" \
+                --query 'Role.Arn' \
+                --output text)
+            fi
+
+            if [[ "$RESOLVED_ROLE_ARN" != arn:aws*:iam::*:role/* ]]; then
+              echo "Resolved role is invalid for Lambda: $RESOLVED_ROLE_ARN"
+              exit 1
+            fi
+
             echo "Creating Lambda function: $LAMBDA_FUNCTION_NAME"
             aws lambda create-function \
               --function-name "$LAMBDA_FUNCTION_NAME" \
