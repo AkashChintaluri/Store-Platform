@@ -1,7 +1,7 @@
 """
 FastAPI application setup with MongoDB integration.
 """
-import os
+import hashlib
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -11,11 +11,17 @@ from slowapi.errors import RateLimitExceeded
 from .db import connect_to_mongo, close_mongo_connection
 from .routes.stores import router as stores_router
 from .routes.auth import router as auth_router
+from .config import get_settings, ConfigError, ENV_PATH
 
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
-    allowed_origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",") if origin.strip()]
+    try:
+        settings = get_settings()
+    except ConfigError:
+        raise
+
+    allowed_origins = settings.allowed_origins
     # Initialize rate limiter
     limiter = Limiter(key_func=get_remote_address)
     
@@ -46,7 +52,10 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         """Connect to MongoDB on startup"""
+        token_fp = hashlib.sha256(settings.orchestrator_token.encode("utf-8")).hexdigest()[:10] if settings.orchestrator_token else "empty"
         print("🚀 Starting Store Platform API...")
+        print(f"🧭 Config env file: {ENV_PATH}")
+        print(f"🔐 Orchestrator auth token loaded: len={len(settings.orchestrator_token)} fp={token_fp}")
         await connect_to_mongo()
         print("📡 API endpoints available:")
         print("   - GET /api/stores")

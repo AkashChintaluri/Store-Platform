@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { useStore } from '../state/useStore'
 import { useAuth } from '../state/useAuth'
 
@@ -39,7 +39,7 @@ export default function StoreTable() {
   const deleteStore = useStore((state) => state.deleteStore)
   const { user } = useAuth()
   const [expandedStore, setExpandedStore] = useState<string | null>(null)
-  const [filter, setFilter] = useState<FilterOption>('me')
+  const [filter, setFilter] = useState<FilterOption>('all')
 
   const toggleExpand = (storeId: string) => {
     setExpandedStore(expandedStore === storeId ? null : storeId)
@@ -68,7 +68,7 @@ export default function StoreTable() {
   // Filter stores based on selected filter
   const filteredStores = stores.filter((store) => {
     if (filter === 'me') {
-      return store.creator_id === user?.id
+      return !store.creator_id || store.creator_id === user?.id
     }
     // 'all' shows all stores (currently backend only returns user's stores)
     return true
@@ -142,8 +142,8 @@ export default function StoreTable() {
               </tr>
             ) : (
               filteredStores.map((store) => (
-                <>
-                  <tr key={store.id}>
+                <Fragment key={store.id}>
+                  <tr>
                     <td>
                       {store.creator_id === user?.id && store.status === 'READY' ? (
                         <button
@@ -202,7 +202,7 @@ export default function StoreTable() {
                   {expandedStore === store.id && 
                    store.status === 'READY' && 
                    store.creator_id === user?.id && (
-                    <tr key={`${store.id}-details`}>
+                    <tr>
                       <td colSpan={7} style={{ backgroundColor: '#f8f9fa', padding: '15px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                           <div style={{ marginBottom: '8px', color: '#666', fontSize: '13px' }}>
@@ -229,7 +229,7 @@ export default function StoreTable() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))
             )}
           </tbody>

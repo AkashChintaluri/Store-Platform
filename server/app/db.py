@@ -1,9 +1,9 @@
 """
 MongoDB database connection and configuration.
 """
-import os
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from typing import Optional
+from .config import get_settings
 
 
 class Database:
@@ -16,8 +16,9 @@ db = Database()
 
 async def connect_to_mongo():
     """Create database connection"""
-    mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-    database_name = os.getenv("MONGODB_DB", "store_platform")
+    settings = get_settings()
+    mongodb_uri = settings.mongodb_uri
+    database_name = settings.mongodb_db
     
     try:
         # For Atlas with Windows SSL compatibility

@@ -42,7 +42,7 @@ The platform features a **type erasure adapter pattern** that makes adding new e
 ### Deployment Layout (3 parts)
 - **Frontend (Amplify)**: React app built with `npm run build`. Set `VITE_API_BASE` to your backend API (e.g., `https://api.example.com/api`).
 - **Backend API (Lightsail)**: FastAPI service with MongoDB. Configure `ALLOWED_ORIGINS` for your Amplify domain, `MONGODB_URI`, `JWT_SECRET_KEY`, and `ORCHESTRATOR_URL`/`ORCHESTRATOR_TOKEN` when using an external orchestrator.
-- **Orchestrator (Lambda or separate service)**: Accepts jobs from backend at `ORCHESTRATOR_URL`, then calls back to `POST /api/stores/{store_id}/status` with header `X-Orchestrator-Token: <ORCHESTRATOR_TOKEN>` to mark stores READY/FAILED and attach URLs/passwords. For local dev, leave `ORCHESTRATOR_URL` unset and the backend will provision inline.
+- **Orchestrator (Lambda or separate service)** in [`orchestrator/`](orchestrator/): Accepts jobs from backend at `ORCHESTRATOR_URL`, then calls back to `POST /api/stores/{store_id}/status` with header `X-Orchestrator-Token: <ORCHESTRATOR_TOKEN>` to mark stores READY/FAILED and attach URLs/passwords. Backend no longer runs Helm directly.
 
 The Store Platform uses a **three-tier architecture** with a unique **adapter pattern** for multi-platform support:
 

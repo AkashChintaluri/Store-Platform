@@ -58,11 +58,15 @@ data:
       wp plugin activate woocommerce --allow-root
     fi
 
-    wp wc tool run install_pages --user=1 --allow-root || true
+    wp eval 'if (class_exists("WC_Install")) { WC_Install::create_pages(); }' --allow-root || true
 
-    PRODUCTS=$(wp post list --post_type=product --format=ids --allow-root)
+    PRODUCTS=$(wp post list --post_type=product --post_status=publish --format=ids --allow-root 2>/dev/null || true)
     if [[ -z "${PRODUCTS}" ]]; then
-      wp wc product create --name="${PRODUCT_NAME}" --type=simple --status=publish --regular_price="${PRODUCT_PRICE}" --user=1 --allow-root
+      PRODUCT_ID=$(wp post create --post_type=product --post_status=publish --post_title="${PRODUCT_NAME}" --porcelain --allow-root)
+      wp post meta set "${PRODUCT_ID}" _regular_price "${PRODUCT_PRICE}" --allow-root
+      wp post meta set "${PRODUCT_ID}" _price "${PRODUCT_PRICE}" --allow-root
+      wp post meta set "${PRODUCT_ID}" _stock_status "instock" --allow-root
+      wp term set product_type "${PRODUCT_ID}" simple --allow-root || true
     fi
 
     wp option patch update woocommerce_cod_settings enabled yes --allow-root || true

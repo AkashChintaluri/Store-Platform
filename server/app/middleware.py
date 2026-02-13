@@ -1,13 +1,13 @@
 """
 Authentication middleware and dependencies.
 """
-import os
 from typing import Optional
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from .auth import decode_access_token
 from .db import get_users_collection
+from .config import get_settings
 
 security = HTTPBearer()
 
@@ -56,7 +56,7 @@ async def require_orchestrator_token(
     x_orchestrator_token: Optional[str] = Header(default=None)
 ):
     """Validate orchestrator callback token."""
-    expected = os.getenv("ORCHESTRATOR_TOKEN", "").strip()
+    expected = get_settings().orchestrator_token
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

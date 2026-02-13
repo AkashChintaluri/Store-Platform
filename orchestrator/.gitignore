@@ -1,0 +1,9 @@
+# Local secrets/config
+config.env
+app/config.env
+.env
+app/.env
+
+# Python cache
+__pycache__/
+app/__pycache__/

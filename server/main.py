@@ -2,12 +2,6 @@
 Entry point for running the FastAPI application.
 Use: uvicorn main:app --reload
 """
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
 # Import app from the app package
 from app.main import app
 
